@@ -1,37 +1,62 @@
-
 pipeline:
   name: App Package and Publish
-  identifier: cicd_app_package_and_publish
+  identifier: app_package_and_publish
+  description: Builds the demo JAR, versions, packages, checksums, generates an SBOM, signs and publishes artifacts to Artifactory.
   projectIdentifier: Demo_project
   orgIdentifier: default
-
+  tags:
+    ai_generated: ""
   properties:
     ci:
       codebase:
-        connectorRef: account.github_devops_connector
-        repoName: DevOps/devops-automation
-        build: <+input>.default(main)
-
+        connectorRef: Demo_code
+        repoName: Dem_ci
+        build:
+          type: branch
+          spec:
+            branch: main
   stages:
     - stage:
         name: App Package and Publish
         identifier: app_package_publish
         type: CI
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
         spec:
           cloneCodebase: true
-
+          platform:
+            os: Linux
+            arch: Amd64
           runtime:
             type: Cloud
             spec: {}
-
-          sharedPaths:
-            - /harness/demo.jar
-
           execution:
             steps:
-
-              # STEP 1: Verify JAR Artifact
-
+              - step:
+                  type: Run
+                  name: Build JAR
+                  identifier: build_jar
+                  spec:
+                    shell: Bash
+                    command: |
+                      echo "Building JAR artifact..."
+                      if [ -f pom.xml ]; then
+                        mvn -B -q package -DskipTests
+                        cp "$(ls target/*.jar | grep -v original | head -n 1)" ./demo.jar
+                      elif [ -f gradlew ]; then
+                        chmod +x gradlew
+                        ./gradlew build -x test
+                        cp "$(ls build/libs/*.jar | head -n 1)" ./demo.jar
+                      elif [ -f demo.jar ]; then
+                        echo "Using demo.jar from repository"
+                      else
+                        echo "ERROR: no pom.xml, gradlew or demo.jar found in repository"
+                        exit 1
+                      fi
               - step:
                   type: Run
                   name: Verify JAR Artifact
@@ -41,28 +66,17 @@ pipeline:
                     command: |
                       echo "Verifying JAR artifact..."
 
-                      JAR_PATH="/harness/demo.jar"
-
-                      if [ -f "$JAR_PATH" ]; then
-                        cp "$JAR_PATH" ./demo.jar
-
-                        BUILD_ID="<+pipeline.executionId>"
-                        COMMIT_SHA="<+codebase.commitSha>"
-                        BRANCH="<+codebase.branch>"
-
-                        echo "BUILD_ID=$BUILD_ID" >> "$HARNESS_ENV"
-                        echo "COMMIT_SHA=$COMMIT_SHA" >> "$HARNESS_ENV"
-                        echo "BRANCH=$BRANCH" >> "$HARNESS_ENV"
-                        echo "JAR_FILE=demo.jar" >> "$HARNESS_ENV"
-
-                        echo "JAR artifact verified!"
-                      else
+                      if [ ! -f ./demo.jar ]; then
                         echo "ERROR: JAR artifact not found"
                         exit 1
                       fi
 
-              # STEP 2: Semantic Versioning
+                      echo "BUILD_ID=<+pipeline.executionId>" >> "$HARNESS_ENV"
+                      echo "COMMIT_SHA=<+codebase.commitSha>" >> "$HARNESS_ENV"
+                      echo "BRANCH=<+codebase.branch>" >> "$HARNESS_ENV"
+                      echo "JAR_FILE=demo.jar" >> "$HARNESS_ENV"
 
+                      echo "JAR artifact verified!"
               - step:
                   type: Run
                   name: Set Version
@@ -79,13 +93,8 @@ pipeline:
                       python3 scripts/set_version.py
 
                       VERSION=$(cat version.txt)
-
                       echo "VERSION=$VERSION" >> "$HARNESS_ENV"
-
                       echo "Version: $VERSION"
-
-              # STEP 3: Prepare Package
-
               - step:
                   type: Run
                   name: Prepare Package
@@ -95,9 +104,6 @@ pipeline:
                     command: |
                       echo "Preparing application package..."
                       python3 scripts/package_app.py
-
-              # STEP 4: Package Deployment Template
-
               - step:
                   type: Run
                   name: Package Deploy Template
@@ -107,9 +113,6 @@ pipeline:
                     command: |
                       echo "Packaging deployment templates..."
                       python3 scripts/package_deploy_template.py
-
-              # STEP 5: Generate Checksums
-
               - step:
                   type: Run
                   name: Generate Checksums
@@ -119,9 +122,6 @@ pipeline:
                     command: |
                       echo "Generating SHA256 checksums..."
                       python3 scripts/checksum.py
-
-              # STEP 6: Generate SBOM
-
               - step:
                   type: Run
                   name: Create SBOM
@@ -131,9 +131,6 @@ pipeline:
                     command: |
                       echo "Generating SBOM..."
                       python3 scripts/create_sbom.py
-
-              # STEP 7: Sign Packages
-
               - step:
                   type: Run
                   name: Sign Packages
@@ -143,9 +140,6 @@ pipeline:
                     command: |
                       echo "Signing packages..."
                       python3 scripts/sign_package.py
-
-              # STEP 8: Publish to JFrog
-
               - step:
                   type: Run
                   name: Publish to Artifactory
@@ -154,6 +148,11 @@ pipeline:
                     shell: Bash
                     command: |
                       echo "Publishing artifacts to JFrog..."
+
+                      if [ -z "${JFROG_USERNAME}" ] || [ -z "${JFROG_PASSWORD}" ]; then
+                        echo "ERROR: JFROG_USERNAME / JFROG_PASSWORD are not set"
+                        exit 1
+                      fi
 
                       export ARTIFACTORY_URL="${JFROG_URL:-https://artifactory.company.com}"
                       export ARTIFACTORY_USERNAME="${JFROG_USERNAME}"
