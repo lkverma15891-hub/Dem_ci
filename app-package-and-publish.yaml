@@ -2,101 +2,8 @@
 pipeline:
   name: App Package and Publish
   identifier: cicd_app_package_and_publish
-  projectIdentifier: <+project.identifier>
-  orgIdentifier: <+org.identifier>
-
-  #═════════════════════════════════════════════════════════════════════════════
-  # 📦 ARTIFACT PACKAGING & PUBLISHING PIPELINE
-  #═════════════════════════════════════════════════════════════════════════════
-  # Features:
-  #  • Semantic Versioning from Git tags (1.2.5-rc123)
-  #  • Auto-triggers on merge to main & hotfix pushes
-  #  • Full security: checksums, SBOM, signatures
-  #  • Complete traceability: Git tag → Commit → Artifact
-  #
-  # See README.md for setup and usage
-  #═════════════════════════════════════════════════════════════════════════════
-
-  #═════════════════════════════════════════════════════════════════════════════
-  # PIPELINE TRIGGERS
-  #═════════════════════════════════════════════════════════════════════════════
-  # Auto-triggers: 1) PR merged to main  2) Push to hotfix/* branches
-  #═════════════════════════════════════════════════════════════════════════════
-
-  triggers:
-    # Trigger 1: Merge to Main (runs when PR is merged to main)
-    - name: Trigger on Merge to Main
-      identifier: merge_to_main_trigger
-      enabled: true
-      orgIdentifier: <+pipeline.orgIdentifier>
-      projectIdentifier: <+pipeline.projectIdentifier>
-      pipelineIdentifier: cicd_app_package_and_publish
-      source:
-        type: Webhook
-        spec:
-          type: Github
-          spec:
-            type: PullRequest
-            spec:
-              connectorRef: account.github_devops_connector
-              autoAbortPreviousExecutions: false
-              payloadConditions:
-                - key: targetBranch
-                  operator: Equals
-                  value: main
-                - key: action
-                  operator: Equals
-                  value: merged
-              headerConditions: []
-              repoName: <+trigger.payload.repository.name>
-              actions:
-                - Closed
-      inputYaml: |
-        pipeline:
-          identifier: cicd_app_package_and_publish
-          properties:
-            ci:
-              codebase:
-                build:
-                  type: branch
-                  spec:
-                    branch: <+trigger.targetBranch>
-
-    # Trigger 2: Hotfix Push (runs on push to hotfix/* branches)
-    - name: Trigger on Hotfix Push
-      identifier: hotfix_push_trigger
-      enabled: true
-      orgIdentifier: <+pipeline.orgIdentifier>
-      projectIdentifier: <+pipeline.projectIdentifier>
-      pipelineIdentifier: cicd_app_package_and_publish
-      source:
-        type: Webhook
-        spec:
-          type: Github
-          spec:
-            type: Push
-            spec:
-              connectorRef: account.github_devops_connector
-              autoAbortPreviousExecutions: false
-              payloadConditions:
-                - key: ref
-                  operator: Regex
-                  value: ^refs/heads/hotfix/.*
-              headerConditions: []
-              repoName: <+trigger.payload.repository.name>
-              actions: []
-      inputYaml: |
-        pipeline:
-          identifier: cicd_app_package_and_publish
-          properties:
-            ci:
-              codebase:
-                build:
-                  type: branch
-                  spec:
-                    branch: <+trigger.sourceBranch>
-
-  # Repository: Clones devops-automation scripts
+  projectIdentifier: Demo_project
+  orgIdentifier: default
 
   properties:
     ci:
@@ -112,18 +19,18 @@ pipeline:
         type: CI
         spec:
           cloneCodebase: true
+
           runtime:
             type: Cloud
             spec: {}
 
-          # Artifact from upstream build pipeline
           sharedPaths:
             - /harness/demo.jar
 
           execution:
             steps:
 
-              # STEP 1: Verify JAR artifact from upstream build
+              # STEP 1: Verify JAR Artifact
 
               - step:
                   type: Run
@@ -132,32 +39,29 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "🔍 Verifying JAR artifact from build pipeline..."
+                      echo "Verifying JAR artifact..."
 
                       JAR_PATH="/harness/demo.jar"
 
                       if [ -f "$JAR_PATH" ]; then
-                        echo "✅ Found JAR artifact"
                         cp "$JAR_PATH" ./demo.jar
 
-                        # Export metadata
                         BUILD_ID="<+pipeline.executionId>"
                         COMMIT_SHA="<+codebase.commitSha>"
                         BRANCH="<+codebase.branch>"
 
-                        echo "export BUILD_ID=$BUILD_ID" >> $HARNESS_ENV
-                        echo "export COMMIT_SHA=$COMMIT_SHA" >> $HARNESS_ENV
-                        echo "export BRANCH=$BRANCH" >> $HARNESS_ENV
-                        echo "export JAR_FILE=demo.jar" >> $HARNESS_ENV
+                        echo "BUILD_ID=$BUILD_ID" >> "$HARNESS_ENV"
+                        echo "COMMIT_SHA=$COMMIT_SHA" >> "$HARNESS_ENV"
+                        echo "BRANCH=$BRANCH" >> "$HARNESS_ENV"
+                        echo "JAR_FILE=demo.jar" >> "$HARNESS_ENV"
 
-                        echo "✅ JAR artifact ready for packaging!"
+                        echo "JAR artifact verified!"
                       else
-                        echo "❌ ERROR: JAR artifact not found at $JAR_PATH"
+                        echo "ERROR: JAR artifact not found"
                         exit 1
                       fi
 
-              # STEP 2: Set Version (Semantic Versioning)
-              # Generates version from Git tags: MAJOR.MINOR.PATCH-rcBUILD
+              # STEP 2: Semantic Versioning
 
               - step:
                   type: Run
@@ -166,18 +70,21 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "🏷️  Generating Semantic Version..."
+                      echo "Generating semantic version..."
 
                       export BUILD_NUMBER="${BUILD_ID}"
                       export BRANCH_NAME="${BRANCH}"
                       export PR_LABEL="${PR_LABEL:-patch}"
 
-                      python3 devops-automation/scripts/set_version.py
+                      python3 scripts/set_version.py
 
                       VERSION=$(cat version.txt)
-                      echo "✅ Version: ${VERSION}"
 
-              # STEP 3: Prepare package metadata
+                      echo "VERSION=$VERSION" >> "$HARNESS_ENV"
+
+                      echo "Version: $VERSION"
+
+              # STEP 3: Prepare Package
 
               - step:
                   type: Run
@@ -186,10 +93,10 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "📦 Preparing package..."
-                      python3 devops-automation/scripts/package_app.py
+                      echo "Preparing application package..."
+                      python3 scripts/package_app.py
 
-              # STEP 4: Package deployment templates
+              # STEP 4: Package Deployment Template
 
               - step:
                   type: Run
@@ -198,10 +105,10 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "📦 Packaging deployment templates..."
-                      python3 devops-automation/scripts/package_deploy_template.py
+                      echo "Packaging deployment templates..."
+                      python3 scripts/package_deploy_template.py
 
-              # STEP 5: Generate checksums
+              # STEP 5: Generate Checksums
 
               - step:
                   type: Run
@@ -210,10 +117,10 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "🔐 Generating SHA-256 checksums..."
-                      python3 devops-automation/scripts/checksum.py
+                      echo "Generating SHA256 checksums..."
+                      python3 scripts/checksum.py
 
-              # STEP 6: Create SBOM
+              # STEP 6: Generate SBOM
 
               - step:
                   type: Run
@@ -222,10 +129,10 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "📋 Creating Software Bill of Materials..."
-                      python3 devops-automation/scripts/create_sbom.py
+                      echo "Generating SBOM..."
+                      python3 scripts/create_sbom.py
 
-              # STEP 7: Sign packages
+              # STEP 7: Sign Packages
 
               - step:
                   type: Run
@@ -234,10 +141,10 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "✍️  Signing packages..."
-                      python3 devops-automation/scripts/sign_package.py
+                      echo "Signing packages..."
+                      python3 scripts/sign_package.py
 
-              # STEP 8: Publish to JFrog Artifactory
+              # STEP 8: Publish to JFrog
 
               - step:
                   type: Run
@@ -246,7 +153,7 @@ pipeline:
                   spec:
                     shell: Bash
                     command: |
-                      echo "🚀 Publishing artifacts to JFrog Artifactory..."
+                      echo "Publishing artifacts to JFrog..."
 
                       export ARTIFACTORY_URL="${JFROG_URL:-https://artifactory.company.com}"
                       export ARTIFACTORY_USERNAME="${JFROG_USERNAME}"
@@ -254,12 +161,6 @@ pipeline:
                       export ARTIFACTORY_REPO="${JFROG_REPO:-libs-release-local}"
                       export APP_NAME="${APP_NAME:-demo}"
 
-                      python3 devops-automation/scripts/publish_package.py
+                      python3 scripts/publish_package.py
 
-                      if [ $? -eq 0 ]; then
-                        echo "✅ All artifacts published successfully!"
-                        echo "🔗 Artifact URL: ${ARTIFACTORY_URL}/${ARTIFACTORY_REPO}/${APP_NAME}/${VERSION}/"
-                      else
-                        echo "❌ Failed to publish artifacts"
-                        exit 1
-                      fi
+                      echo "Artifacts publishing completed!"
