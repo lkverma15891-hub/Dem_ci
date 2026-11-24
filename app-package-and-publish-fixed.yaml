@@ -160,3 +160,4 @@ pipeline:
                       python3 scripts/publish_package.py
 
                       echo "Artifacts URL: ${ARTIFACTORY_URL}/${ARTIFACTORY_REPO}/${APP_NAME}/${VERSION}/"
+        description: ""
