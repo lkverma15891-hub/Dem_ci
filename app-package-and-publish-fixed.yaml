@@ -11,10 +11,7 @@ pipeline:
       codebase:
         connectorRef: Demo_code
         repoName: Dem_ci
-        build:
-          type: branch
-          spec:
-            branch: main
+        build: <+input>
   stages:
     - stage:
         name: App Package and Publish
@@ -162,4 +159,4 @@ pipeline:
 
                       python3 scripts/publish_package.py
 
-                      echo "Artifacts publishing completed!"
+                      echo "Artifacts URL: ${ARTIFACTORY_URL}/${ARTIFACTORY_REPO}/${APP_NAME}/${VERSION}/"
