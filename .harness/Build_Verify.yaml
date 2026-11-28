@@ -35,18 +35,6 @@ pipeline:
           execution:
             steps:
               - step:
-                  type: GitClone
-                  name: Clone DevOps Automation
-                  identifier: clone_devops_automation
-                  spec:
-                    connectorRef: Demo_code
-                    repoName: DevOps/devops-automation
-                    cloneDirectory: /harness/devops-automation
-                    build:
-                      type: branch
-                      spec:
-                        branch: main
-              - step:
                   type: Run
                   name: Lint
                   identifier: lint
