@@ -1,99 +1,107 @@
-############
 pipeline:
-  id: app_build_verify2
   name: SpringBoot Build and Verify
-  description: Automated CI for Spring Boot applications with lint, secret scan, build, tests, SAST and SCA quality gates.
-  inputs:
-    branch:
-      type: string
-      required: true
-      description: Branch of the application repository to build
-  clone:
-    enabled: true
-    connector: Demo_code
-    repo: kverma15891-hub/Dem_ci
-    ref:
-      type: branch
-      name: ${{ inputs.branch }}
+  identifier: Build_Verify
+  description: Automated CI for Spring Boot applications with lint, secret scan, build and unit tests.
+  projectIdentifier: Demo_project
+  orgIdentifier: default
+  tags:
+    ai_generated: ""
+  properties:
+    ci:
+      codebase:
+        connectorRef: Demo_code
+        repoName: Dem_ci
+        build: <+input>
   stages:
-    - id: build_and_verify
-      name: Build and Verify
-      runtime: cloud
-      platform:
-        os: linux
-        arch: amd64
-      steps:
-        - id: clone_devops_automation
-          name: Clone DevOps Automation
-          template:
-            uses: gitCloneStep
-            with:
-              connector: kverma15891-hub/Dem_ci
-              repo_name: DevOps/devops-automation
-              build:
-                target: Git Branch
-                branch: main
-              clone_directory: /harness/devops-automation
-        - id: lint
-          name: Lint
-          run:
-            script: |
-              echo "Running code quality checks..."
-              python3 devops-automation/scripts/lint.py
-        - id: secret_scan
-          name: Secret Scan
-          run:
-            script: |
-              echo "Scanning for exposed secrets..."
-              python3 devops-automation/scripts/secret_scan.py
-        - id: dependencies
-          name: Install Dependencies
-          run:
-            script: |
-              echo "Resolving dependencies from JFrog Artifactory..."
-              mvn dependency:resolve -B
-        - id: build
-          name: Build
-          run:
-            script: |
-              echo "Building application..."
-              mvn clean package -DskipTests -B
-              echo "Build complete:"
-              ls -lh target/*.jar
+    - stage:
+        name: Build and Verify
+        identifier: build_and_verify
+        description: Lint, secret scan, build and unit test the Spring Boot application.
+        type: CI
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: GitClone
+                  name: Clone DevOps Automation
+                  identifier: clone_devops_automation
+                  spec:
+                    connectorRef: Demo_code
+                    repoName: DevOps/devops-automation
+                    cloneDirectory: /harness/devops-automation
+                    build:
+                      type: branch
+                      spec:
+                        branch: main
+              - step:
+                  type: Run
+                  name: Lint
+                  identifier: lint
+                  spec:
+                    command: |-
+                      echo "Running code quality checks..."
+                      python3 devops-automation/scripts/lint.py
+              - step:
+                  type: Run
+                  name: Secret Scan
+                  identifier: secret_scan
+                  spec:
+                    command: |-
+                      echo "Scanning for exposed secrets..."
+                      python3 devops-automation/scripts/secret_scan.py
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: dependencies
+                  spec:
+                    command: |-
+                      echo "Resolving dependencies from JFrog Artifactory..."
+                      mvn dependency:resolve -B
+              - step:
+                  type: Run
+                  name: Build
+                  identifier: build
+                  spec:
+                    command: |-
+                      echo "Building application..."
+                      mvn clean package -DskipTests -B
+                      echo "Build complete:"
+                      ls -lh target/*.jar
 
-              echo "Saving JAR for publish pipeline..."
-              mkdir -p /harness/outputs
-              cp target/*.jar /harness/outputs/demo.jar
+                      echo "Saving JAR for publish pipeline..."
+                      mkdir -p /harness/outputs
+                      cp target/*.jar /harness/outputs/demo.jar
 
-              cat > /harness/outputs/build-info.json <<EOF
-              {
-                "jarFile": "demo.jar",
-                "jarPath": "/harness/outputs/demo.jar",
-                "commitSha": "${{ codebase.commitSha }}",
-                "branch": "${{ codebase.branch }}",
-                "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-              }
-              EOF
+                      cat > /harness/outputs/build-info.json <<EOF
+                      {
+                        "jarFile": "demo.jar",
+                        "jarPath": "/harness/outputs/demo.jar",
+                        "commitSha": "<+codebase.commitSha>",
+                        "branch": "<+codebase.branch>",
+                        "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                      }
+                      EOF
 
-              echo "JAR saved at: /harness/outputs/demo.jar"
-              echo "Metadata: /harness/outputs/build-info.json"
-        - id: tests
-          name: Unit Tests
-          run-test:
-            script: |
-              echo "Running unit tests..."
-              mvn test -B
-        # - id: coverity
-        #   name: Coverity SAST
-        #   run:
-        #     script: |
-        #       echo "Running Coverity SAST scan..."
-        #       python3 devops-automation/scripts/coverity.py
-        # - id: blackduck
-        #   name: Black Duck SCA
-        #   if: ${{ codebase.prNumber != "" }}
-        #   run:
-        #     script: |
-        #       echo "Running Black Duck SCA scan..."
-        #       python3 devops-automation/scripts/blackduck.py
-        #       echo "Results uploaded to Black Duck SRM"
+                      echo "JAR saved at: /harness/outputs/demo.jar"
+                      echo "Metadata: /harness/outputs/build-info.json"
+              - step:
+                  type: Run
+                  name: Unit Tests
+                  identifier: tests
+                  spec:
+                    command: |-
+                      echo "Running unit tests..."
+                      mvn test -B
