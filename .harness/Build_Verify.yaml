@@ -10,8 +10,8 @@ pipeline:
       description: Branch of the application repository to build
   clone:
     enabled: true
-    connector: connector_Github_3a28
-    repo: Orion-user1/app-build-verify
+    connector: Demo_code
+    repo: kverma15891-hub/Dem_ci
     ref:
       type: branch
       name: ${{ inputs.branch }}
@@ -28,7 +28,7 @@ pipeline:
           template:
             uses: gitCloneStep
             with:
-              connector: connector_Github_3a28
+              connector: kverma15891-hub/Dem_ci
               repo_name: DevOps/devops-automation
               build:
                 target: Git Branch
